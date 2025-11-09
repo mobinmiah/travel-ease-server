@@ -25,16 +25,31 @@ app.get('/', (req, res) => {
     res.send('travelease is running')
 })
 
-async function run(){
-    try{
+async function run() {
+    try {
         await client.connect();
 
-        const db = client.db("travel_ease")
+        const db = client.db("travel_ease_db");
+        const vehicles = db.collection("vehicles");
+        const users = db.collection("users");
 
+        //    users apis
+        app.get('/users', async (req, res) => {
+            const cursor = users.find();
+            const result = await cursor.toArray();
+            res.send(result);
+        })
+
+        // vehicles apis
+        app.get('/vehicles', async (req, res) => {
+            const cursor = vehicles.find();
+            const result = await cursor.toArray();
+            res.send(result);
+        })
         await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     }
-    finally{
+    finally {
 
     }
 }
