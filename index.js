@@ -5,9 +5,39 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const app = express();
 const port = process.env.PORT || 3000;
 
+const admin = require("firebase-admin");
+
+const serviceAccount = require("./travel-ease-firebase-admin-key.json");
+
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
+});
+
 // middlewares
 app.use(cors());
 app.use(express.json());
+
+const verifyFireBaseToken = async (req, res, next) => {
+    const authorization = req.headers.authorization;
+    if (!authorization) {
+        return res.status(401).send({ message: 'Unauthorized access' })
+    }
+    const token = authorization.split(' ')[1]
+    
+    if (!token) {
+        return res.status(401).send({ message: 'Unauthorized access' })
+    }
+    try {
+        const decoded = await admin.auth().verifyIdToken(token);
+        console.log('inside token', decoded)
+        req.token_email = decoded.email;
+        next();
+    }
+    catch (error) {
+        return res.status(401).send({ message: 'Unauthorized access' })
+
+    }
+}
 
 // connection string
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.9hcy35q.mongodb.net/?appName=Cluster0`;
@@ -68,14 +98,14 @@ async function run() {
             res.send(result);
         })
 
-        app.get('/vehicles/:id', async (req, res) => {
+        app.get('/vehicles/:id', verifyFireBaseToken, async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
             const result = await vehicles.findOne(query);
             res.send(result);
         })
 
-        app.post('/vehicles', async (req, res) => {
+        app.post('/vehicles', verifyFireBaseToken, async (req, res) => {
             const newVehicle = req.body;
             const result = await vehicles.insertOne(newVehicle);
             res.send(result);
