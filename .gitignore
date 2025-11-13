@@ -1,3 +1,4 @@
 node_modules
 .env
 travel-ease-firebase-admin-key.json
+.vercel

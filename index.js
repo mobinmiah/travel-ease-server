@@ -7,13 +7,14 @@ const app = express();
 const admin = require("firebase-admin");
 const port = process.env.PORT || 3000;
 
-const serviceAccount = require("./travel-ease-firebase-admin-key.json");
+// index.js
+const decoded = Buffer.from(process.env.FIREBASE_SERVICE_KEY, "base64").toString("utf8");
+const serviceAccount = JSON.parse(decoded);
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
 });
 
 // middlewares
-// app.use(cors());
 app.use(
     cors({
         origin: ["http://localhost:5173"], // ✅ frontend origin
@@ -29,7 +30,7 @@ const verifyFireBaseToken = async (req, res, next) => {
     }
 
     const token = authorization.split(' ')[1];
-     try {
+    try {
         const decoded = await admin.auth().verifyIdToken(token);
         // console.log('inside token', token)
         req.token_email = decoded.email;
@@ -95,7 +96,7 @@ async function run() {
         })
 
 
-        app.get('/vehicles',  async (req, res) => {
+        app.get('/vehicles', async (req, res) => {
             console.log(query.email)
             const email = req.query.email;
             const query = {};
@@ -117,22 +118,63 @@ async function run() {
             res.send(result);
         })
 
-        app.get('/vehicledetails/:id',  async (req, res) => {
+        app.get('/vehicledetails/:id', async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
             const result = await vehicles.findOne(query);
             res.send(result);
         })
 
+
+
         app.post('/vehicles', verifyFireBaseToken, async (req, res) => {
             const newVehicle = req.body;
             const result = await vehicles.insertOne(newVehicle);
             res.send(result);
-
         })
 
-        // bookings apis
+        app.get("/myvehicles", verifyFireBaseToken, async (req, res) => {
+            try {
+                const email = req.query.email;
+                if (email !== req.token_email) {
+                    return res.status(403).send({ message: "Forbidden access" });
+                }
+                const query = { userEmail: email };
+                const myVehicles = vehicles.find(query)
+                const result = await myVehicles.toArray();
+                res.send(result);
+            } catch {
 
+            }
+        });
+
+        app.patch("/myvehicles/:id", verifyFireBaseToken, async (req, res) => {
+            try {
+                const id = req.params.id;
+                const updatedData = req.body;
+                const email = req.token_email;
+                const query = { _id: new ObjectId(id), userEmail: email };
+                const updateVehicle = { $set: updatedData };
+                const result = await vehicles.updateOne(query, updateVehicle);
+                res.send(result);
+            } catch {
+
+            }
+        });
+
+        app.delete("/myvehicles/:id", verifyFireBaseToken, async (req, res) => {
+            try {
+                const id = req.params.id;
+                const email = req.token_email;
+                const query = { _id: new ObjectId(id), userEmail: email };
+                const result = await vehicles.deleteOne(query);
+                res.send(result);
+            } catch {
+
+            }
+        });
+
+        // bookings apis
         app.post('/bookings', async (req, res) => {
             const newBooking = req.body;
             const result = await bookings.insertOne(newBooking);
@@ -142,19 +184,33 @@ async function run() {
         app.get('/bookings', verifyFireBaseToken, async (req, res) => {
             const email = req.query.email;
             const query = {};
+
             if (email) {
-                query.userEmail = email;
-            }
-            if (email !== req.token_email) {
-                res.status(403).send({ message: 'Fobidden access' })
+                query.buyerEmail = email;
             }
 
+            if (email !== req.token_email) {
+                return res.status(403).send({ message: 'Forbidden access' });
+            }
+
+            console.log(query);
             const cursor = bookings.find(query);
             const result = await cursor.toArray();
+
             res.send(result);
         });
 
-        await client.db("admin").command({ ping: 1 });
+        app.delete('/bookings/:id', verifyFireBaseToken, async (req, res) => {
+            try {
+                const id = req.params.id;
+                const query = { _id: new ObjectId(id) };
+                const result = await bookings.deleteOne(query);
+                res.send(result);
+            } catch {
+            }
+        });
+
+        // await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     }
     finally {
