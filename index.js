@@ -17,8 +17,8 @@ admin.initializeApp({
 // middlewares
 app.use(
     cors({
-        origin: ["http://localhost:5173"], // ✅ frontend origin
-        credentials: true,                  // ✅ allow cookies / auth headers
+        origin: ["http://localhost:5173"], 
+        credentials: true,                 
     })
 );
 app.use(express.json());
@@ -32,7 +32,7 @@ const verifyFireBaseToken = async (req, res, next) => {
     const token = authorization.split(' ')[1];
     try {
         const decoded = await admin.auth().verifyIdToken(token);
-        // console.log('inside token', token)
+
         req.token_email = decoded.email;
         next();
     }
@@ -153,14 +153,54 @@ async function run() {
                 const id = req.params.id;
                 const updatedData = req.body;
                 const email = req.token_email;
-                const query = { _id: new ObjectId(id), userEmail: email };
-                const updateVehicle = { $set: updatedData };
-                const result = await vehicles.updateOne(query, updateVehicle);
-                res.send(result);
-            } catch {
 
+                    // Check valid ObjectId
+                    if (!ObjectId.isValid(id)) {
+                        return res.status(400).json({ message: "Invalid vehicle ID" });
+                    }
+
+                // Ensure user owns the vehicle
+                const query = { _id: new ObjectId(id), userEmail: email };
+
+                // Set updated fields
+                const updateVehicle = { $set: updatedData };
+
+                // Perform update
+                const result = await vehicles.updateOne(query, updateVehicle);
+
+                if (result.matchedCount === 0) {
+                    return res
+                        .status(403)
+                        .json({ message: "Unauthorized or vehicle not found" });
+                }
+
+                res.status(200).json({
+                    message: "Vehicle updated successfully",
+                    result,
+                });
+            } catch (error) {
+                console.error("Error updating vehicle:", error);
+                res.status(500).json({
+                    message: "Internal server error while updating vehicle",
+                    error: error.message,
+                });
             }
         });
+
+
+        // app.patch("/myvehicles/:id", verifyFireBaseToken, async (req, res) => {
+        //     try {
+        //         const id = req.params.id;
+        //         const updatedData = req.body;
+        //         const email = req.token_email;
+        //         const query = { _id: new ObjectId(id), userEmail: email };
+        //         const updateVehicle = { $set: updatedData };
+        //         const result = await vehicles.updateOne(query, updateVehicle);
+        //         res.send(result);
+        //     } catch {
+
+        //     }
+        // });
 
         app.delete("/myvehicles/:id", verifyFireBaseToken, async (req, res) => {
             try {
