@@ -98,12 +98,33 @@ async function run() {
         });
 
         app.delete("/myvehicles/:id", async (req, res) => {
-            const id = req.params.id;
-            const email = req.token_email;
-            const query = { _id: new ObjectId(id), userEmail: email };
-            const result = await vehicles.deleteOne(query);
-            res.send(result);
+            try {
+                const id = req.params.id;
+                const email = req.query.email;
+
+                if (!email) {
+                    return res.status(403).send({ message: "Forbidden access" });
+                }
+
+                const query = {
+                    _id: new ObjectId(id),
+                    ownerEmail: email,
+                };
+
+                const result = await vehicles.deleteOne(query);
+
+
+                res.send(result);
+            } catch (error) {
+                console.error("DELETE ERROR:", error);
+                res.status(500).send({
+                    success: false,
+                    message: "Internal server error",
+                });
+            }
         });
+
+
 
         app.post("/bookings", async (req, res) => {
             const newBooking = req.body;
