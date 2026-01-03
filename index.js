@@ -108,22 +108,33 @@ async function run() {
 
         // vehicles
         app.get("/vehicles", async (req, res) => {
-            const { search = "", category, sort = "createdAt", order = "desc" } = req.query;
+            try {
+                const {
+                    search = "",
+                    category = "",
+                    sort = "createdAt",
+                    order = "desc",
+                } = req.query;
 
-            const query = {
-                ...(category && { category }),
-                $or: [
-                    { vehicleName: { $regex: search, $options: "i" } },
-                    { location: { $regex: search, $options: "i" } },
-                ],
-            };
+                const query = {
+                    ...(category && { category }),
+                    ...(search && {
+                        $or: [
+                            { vehicleName: { $regex: search, $options: "i" } },
+                            { location: { $regex: search, $options: "i" } },
+                        ],
+                    }),
+                };
 
-            const result = await vehicles
-                .find(query)
-                .sort({ [sort]: order === "desc" ? -1 : 1 })
-                .toArray();
+                const vehiclesData = await vehicles
+                    .find(query)
+                    .sort({ [sort]: order === "desc" ? -1 : 1 })
+                    .toArray();
 
-            res.send(result);
+                res.send(vehiclesData);
+            } catch (error) {
+                res.status(500).send({ message: "Failed to fetch vehicles" });
+            }
         });
 
         app.get("/recentvehicles", async (req, res) => {
@@ -199,8 +210,7 @@ async function run() {
             res.send({ success: true, result });
         });
 
-        /* ================= BOOKINGS ================= */
-
+        // bookings
         app.post("/bookings", verifyToken, async (req, res) => {
             const booking = {
                 ...req.body,
@@ -236,6 +246,48 @@ async function run() {
 
             res.send({ success: true, result });
         });
+
+        // dashboard stats
+        app.get("/dashboard/stats", verifyToken, async (req, res) => {
+            const email = req.user.email;
+
+            const totalVehicles = await vehicles.countDocuments();
+            const totalBookings = await bookings.countDocuments();
+
+            const myVehicles = await vehicles.countDocuments({ userEmail: email });
+            const myBookings = await bookings.countDocuments({ buyerEmail: email });
+
+            res.send({
+                totalVehicles,
+                totalBookings,
+                myVehicles,
+                myBookings,
+            });
+        });
+
+        app.get("/dashboard/chart", verifyToken, async (req, res) => {
+            const result = await bookings.aggregate([
+                {
+                    $lookup: {
+                        from: "vehicles",
+                        localField: "vehicleId",
+                        foreignField: "_id",
+                        as: "vehicle",
+                    },
+                },
+                { $unwind: "$vehicle" },
+                {
+                    $group: {
+                        _id: "$vehicle.category",
+                        total: { $sum: 1 },
+                    },
+                },
+            ]).toArray();
+
+            res.send(result);
+        });
+
+        
 
         console.log("✅ MongoDB connected");
     } finally {
